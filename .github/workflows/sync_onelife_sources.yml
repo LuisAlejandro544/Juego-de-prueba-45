@@ -1,0 +1,99 @@
+name: Sincronizar fuentes de One Hour One Life
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_data:
+        description: 'Descargar datos y assets (OneLifeData7: sprites, objects, sounds)'
+        required: true
+        type: boolean
+        default: true
+      data_depth:
+        description: 'Profundidad de clonado para repositorios (shallow clone)'
+        required: false
+        type: string
+        default: '1'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-repos:
+    name: Descargar y organizar fuentes de OneLife
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio actual
+        uses: actions/checkout@v4
+
+      - name: Crear estructura de directorios de destino
+        run: |
+          mkdir -p ohol_sources/OneLife
+          mkdir -p ohol_sources/minorGems
+          mkdir -p ohol_sources/OneLifeData7
+
+      - name: Clonar OneLife (Código de Cliente y Servidor)
+        run: |
+          echo "Clonando jasonrohrer/OneLife..."
+          git clone --depth ${{ inputs.data_depth }} https://github.com/jasonrohrer/OneLife.git temp_onelife
+          
+          # Copiar la lógica del cliente (gameSource) y la lógica del servidor (server) para modo offline
+          cp -r temp_onelife/gameSource ohol_sources/OneLife/
+          cp -r temp_onelife/server ohol_sources/OneLife/
+          
+          # Copiar archivos de configuración y scripts raíz útiles si existen
+          cp -r temp_onelife/documentation ohol_sources/OneLife/ 2>/dev/null || true
+          
+          rm -rf temp_onelife
+
+      - name: Clonar minorGems (Motor de utilidades C++)
+        run: |
+          echo "Clonando jasonrohrer/minorGems..."
+          git clone --depth ${{ inputs.data_depth }} https://github.com/jasonrohrer/minorGems.git temp_minorgems
+          
+          # Copiar componentes del motor
+          cp -r temp_minorgems/* ohol_sources/minorGems/
+          rm -rf ohol_sources/minorGems/.git
+          
+          rm -rf temp_minorgems
+
+      - name: Clonar OneLifeData7 (Datos, Sprites, Transiciones, Objetos)
+        if: ${{ inputs.include_data }}
+        run: |
+          echo "Clonando jasonrohrer/OneLifeData7..."
+          git clone --depth ${{ inputs.data_depth }} https://github.com/jasonrohrer/OneLifeData7.git temp_data7
+          
+          # Copiar definiciones de juego necesarias para el cliente offline
+          cp -r temp_data7/objects ohol_sources/OneLifeData7/
+          cp -r temp_data7/transitions ohol_sources/OneLifeData7/
+          cp -r temp_data7/categories ohol_sources/OneLifeData7/ 2>/dev/null || true
+          cp -r temp_data7/animations ohol_sources/OneLifeData7/
+          cp -r temp_data7/sprites ohol_sources/OneLifeData7/
+          cp -r temp_data7/sounds ohol_sources/OneLifeData7/ 2>/dev/null || true
+          cp temp_data7/*.txt ohol_sources/OneLifeData7/ 2>/dev/null || true
+          
+          rm -rf temp_data7
+
+      - name: Generar resumen de sincronización
+        run: |
+          cat << 'EOF' > ohol_sources/README.md
+          # Fuentes de One Hour One Life
+
+          Este directorio contiene las fuentes sincronizadas del proyecto original One Hour One Life de Jason Rohrer:
+
+          - `OneLife/gameSource/`: Código del cliente en C++ (lógica de juego, interfaz, interacción).
+          - `OneLife/server/`: Lógica del servidor original (referencia para la simulación offline integrada).
+          - `minorGems/`: Motor gráfico, matemático y de I/O en C++.
+          - `OneLifeData7/`: Datos del juego (objetos, transiciones/crafteos, sprites, animaciones y sonidos).
+          EOF
+
+      - name: Hacer commit y push de las fuentes descargadas
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ohol_sources/
+          if git diff --staged --quiet; then
+            echo "No hay cambios nuevos para commitear."
+          else
+            git commit -m "Descarga y sincronización de fuentes de OneLife para port móvil"
+            git push
+          fi

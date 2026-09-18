@@ -1,0 +1,6 @@
+{
+  "name": "Hello World",
+  "description": "Aplicación Hello World en modo horizontal para Android",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
